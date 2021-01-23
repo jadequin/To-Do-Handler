@@ -2,6 +2,16 @@ import * as express from "express";
 import * as session from "express-session";
 import * as mysql from "mysql";
 
+// Ähnlich einer Klasse als Interface nur weniger komplex
+interface IRegistrierteBenutzer {
+    name: string;
+    passwort: string;
+}
+
+// Dummys für bereits registrierte Benutzer
+// TODO: Muss initial (bei Serverstart) gefüllt werden, sowie mit einem Eintrag bei Registrierung ergänzt werden
+const register: IRegistrierteBenutzer[] = [];
+
 // Ergänzt/Überläd den Sessionstore um das Attribut "signInName"
 declare module "express-session" {
     interface Session {
@@ -10,8 +20,16 @@ declare module "express-session" {
 }
 
 // Stellt eine Verbindung zum Datenbankserver her
+const connection: mysql.Connection = mysql.createConnection({
+    database: "online_to_do",
+    host: "localhost",
+    user: "root"
+});
 
 // Öffnet die Verbindung zum Datenbankserver
+connection.connect((err) => {
+    if (err !== null) {console.log("DB-Fehler: " + err);}
+});
 
 // Erzeugt und startet einen Express-Server
 const router: express.Express = express();
@@ -24,6 +42,13 @@ router.use(express.json());
 router.use(express.urlencoded({extended: false}));
 
 // Bei jedem Request wird, falls noch nicht vorhanden, ein Cookie erstellt
+router.use(session({
+    cookie: {
+        expires: new Date(Date.now() + (1000 + 60 * 60)),
+    },
+    secret: Math.random().toString(),
+}));
+
 
 // Der Ordner ./view/res wird auf die URL /res gemapped
 router.use("/res", express.static(__dirname + "/view/res"));
@@ -46,6 +71,7 @@ function signIn(req: express.Request, res: express.Response): void {
     const signInName: string = req.body.signInName;
     const signInPass: string = req.body.signInPass;
 
+    const benutzer: IRegistrierteBenutzer = getUser([req.body.loginName, req.body.loginPasswort]);
 }
 
 // Löscht den Sessionstore und weist den Client an, das Cookie zu löschen
