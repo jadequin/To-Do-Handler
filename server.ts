@@ -6,6 +6,7 @@ import * as mysql from "mysql";
 declare module "express-session" {
     interface Session {
         signInName: string;
+        sessionKey: string;
     }
 }
 
@@ -52,11 +53,17 @@ router.get("/", (req: express.Request, res: express.Response) => {
 
 // Beschreibt alle Routen und ruft die jeweilige Funktion oder Funktionskette auf
 router.post("/signIn", signIn);
+router.post("/register", register);
 router.post("/signOut", signOut);
+router.delete("/delUser", checkLogin, delUser);
 router.post("/task", checkLogin, addTask);
 router.delete("/task/:id", checkLogin, delTask);
+router.put("/task", checkLogin, updTask)
 router.get("/tasks", checkLogin, getTasks);
 router.get("/isLoggedIn", checkLogin, isLoggedIn);
+
+// Verwaltet eine Map mit Username / RandomSessionKey
+const userSessions = new Set<string>();
 
 // Prüft, ob ein Nutzer registriert ist und speichert ggf. den Nutzernamen im Sessionstore ab
 function signIn(req: express.Request, res: express.Response): void {
@@ -66,7 +73,29 @@ function signIn(req: express.Request, res: express.Response): void {
     query("SELECT name FROM anwender WHERE name = ? AND passwort = ?;", [signInName, signInPass]).then((result: any) => {
         // Setzt das Attribut signInName aus dem Sessionstore auf den ersten Eintrag aus dem der SQL-Reflektion
         if(result.length === 1) {
+            const sessionKey: string = Math.random().toString();
+            userSessions.add(sessionKey);
+
             req.session.signInName = signInName;
+            req.session.sessionKey = sessionKey;
+            res.sendStatus(200);
+        } else {
+            res.sendStatus(404);
+        }
+    }).catch(() => {
+        // DBS-Fehler
+        res.sendStatus(500);
+    });
+}
+
+// Legt einen neuen Nutzer an
+function register(req: express.Request, res: express.Response): void {
+    const signInName: string = req.body.signInName;
+    const signInPass: string = req.body.signInPass;
+
+    query("INSERT INTO anwender VALUES(?, ?);", [signInName, signInPass]).then((result: any) => {
+        // Setzt das Attribut signInName aus dem Sessionstore auf den ersten Eintrag aus dem der SQL-Reflektion
+        if(result.length === 1) {
             res.sendStatus(200);
         } else {
             res.sendStatus(404);
@@ -82,6 +111,27 @@ function signOut(req: express.Request, res: express.Response): void {
     req.session.destroy(() => {
         res.clearCookie("connect.sid");
         res.sendStatus(200);
+    });
+}
+
+// Löscht einen Benutzer und all seine Tasks
+function delUser(req: express.Request, res: express.Response): void {
+    const signInName: string = req.session.signInName;
+
+    query("DELETE FROM task WHERE name = ?;", [signInName]).then((results0: any) => {
+        query("DELETE FROM anwender WHERE name = ?;", [signInName]).then((results1: any) => {
+            if(results1.length === 1) {
+                res.sendStatus(200);
+            } else {
+                res.sendStatus(404);
+            }
+        }).catch(() => {
+            // DBS-Fehler
+            res.sendStatus(500);
+        });
+    }).catch(() => {
+        // DBS-Fehler
+        res.sendStatus(500);
     });
 }
 
@@ -108,6 +158,25 @@ function delTask(req: express.Request, res: express.Response): void {
     const id: string = req.params.id;
 
     query("DELETE FROM task WHERE id = ?;", [id]).then((results: any) => {
+        if(results.length === 1) {
+            res.sendStatus(200);
+        } else {
+            res.sendStatus(404);
+        }
+    }).catch(() => {
+        // DBS-Fehler
+        res.sendStatus(500);
+    });
+}
+
+// Bearbeitet einen Task aus der Datenbank
+function updTask(req: express.Request, res: express.Response): void {
+    const taskId: string = req.body.taskId;
+    const taskName: string = req.body.taskName;
+    const taskDate: string = req.body.taskDate;
+    const signInName: string = req.session.signInName;
+
+    query("UPDATE task SET titel = ?, faelligkeit = ? WHERE id = ? AND name = ?;", [taskName, taskDate, taskId, signInName]).then((results: any) => {
         if(results.length === 1) {
             res.sendStatus(200);
         } else {

@@ -34,12 +34,42 @@
     </form>
 </section>
 
-<section id="signOut" class="container mb-4">
-    <h2>Abmeldung</h2>
-    <form id="signOutForm">
-        <input type="submit" value="Abmelden" class="btn btn-primary">
+<section id="register" class="container mb-4">
+    <h2>Registrierung</h2>
+    <form id="registerForm" oninput='registerPassConf.setCustomValidity(registerPassConf.value != registerPass.value ? "Passwort stimmt nicht überein." : "")'>
+        <div class="form-group">
+            <label for="signInName">Nutzername:</label>
+            <input id="registerName" name="registerName" type="text" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <label for="registerPass">Passwort:</label>
+            <input id="registerPass" name="registerPass" type="password" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <label for="registerPassConf">Passwort bestätigen:</label>
+            <input id="registerPassConf" name="registerPassConf" type="password" class="form-control">
+        </div>
+        <input type="submit" value="Registrieren" class="btn btn-primary">
     </form>
 </section>
+
+<section id="signOut" class="container mb-4">
+    <div class="row">
+        <div class="col">
+            <h2>Abmeldung</h2>
+            <form id="signOutForm">
+                <input type="submit" value="Abmelden" class="btn btn-primary">
+            </form>
+        </div>
+        <div class="col">
+            <h2>Benutzer löschen</h2>
+            <form id="delUserForm">
+                <input type="submit" value="Löschen" class="btn btn-primary">
+            </form>
+        </div>
+    </div>
+</section>
+
 
 <section id="tasks" class="container">
     <h2>ToDo-Liste</h2>
@@ -49,6 +79,7 @@
             <tr>
                 <th scope="col">Task</th>
                 <th scope="col">Fälligkeit</th>
+                <th scope="col">Bearbeiten</th>
                 <th scope="col">Erledigt</th>
             </tr>
             </thead>
