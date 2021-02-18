@@ -2,7 +2,7 @@ import * as express from "express";
 import * as session from "express-session";
 import * as mysql from "mysql";
 
-// Ergänzt/Überläd den Sessionstore um das Attribut "signInName"
+// Ergänzt/Überlädt den Sessionstore um das Attribut "signInName"
 declare module "express-session" {
     interface Session {
         signInName: string;
@@ -54,16 +54,16 @@ router.get("/", (req: express.Request, res: express.Response) => {
 // Beschreibt alle Routen und ruft die jeweilige Funktion oder Funktionskette auf
 router.post("/signIn", signIn);
 router.post("/register", register);
-router.post("/signOut", signOut);
-router.delete("/delUser", checkLogin, delUser);
+router.post("/signOut", checkLogin, signOut);
+router.delete("/delUser", checkLogin, delUser, signOut);
 router.post("/task", checkLogin, addTask);
 router.delete("/task/:id", checkLogin, delTask);
-router.put("/task", checkLogin, updTask)
+router.put("/task", checkLogin, updTask);
 router.get("/tasks", checkLogin, getTasks);
 router.get("/isLoggedIn", checkLogin, isLoggedIn);
 
 // Verwaltet eine Map mit Username / RandomSessionKey
-const userSessions = new Set<string>();
+const userSessions = new Map<string, string>();
 
 // Prüft, ob ein Nutzer registriert ist und speichert ggf. den Nutzernamen im Sessionstore ab
 function signIn(req: express.Request, res: express.Response): void {
@@ -74,7 +74,7 @@ function signIn(req: express.Request, res: express.Response): void {
         // Setzt das Attribut signInName aus dem Sessionstore auf den ersten Eintrag aus dem der SQL-Reflektion
         if(result.length === 1) {
             const sessionKey: string = Math.random().toString();
-            userSessions.add(sessionKey);
+            userSessions.set(sessionKey, signInName);
 
             req.session.signInName = signInName;
             req.session.sessionKey = sessionKey;
@@ -93,13 +93,19 @@ function register(req: express.Request, res: express.Response): void {
     const signInName: string = req.body.signInName;
     const signInPass: string = req.body.signInPass;
 
-    query("INSERT INTO anwender VALUES(?, ?);", [signInName, signInPass]).then((result: any) => {
-        // Setzt das Attribut signInName aus dem Sessionstore auf den ersten Eintrag aus dem der SQL-Reflektion
-        if(result.length === 1) {
-            res.sendStatus(200);
-        } else {
+    // Als erstes wird überprüft, ob bereits ein Nutzer mit dem entsprechenden Namen angelegt wurde
+    query("SELECT * FROM anwender WHERE name = ?;", [signInName]).then((result: any) => {
+        // Falls es bereits einen Nutzer mit dem Namen gibt, wird ein Error zurückgesendet
+        if(result.length !== 0)
             res.sendStatus(404);
-        }
+    }).catch(() => {
+        // DBS-Fehler
+        res.sendStatus(500);
+    });
+
+    // Nutzer wird angelegt
+    query("INSERT INTO anwender VALUES(?, ?);", [signInName, signInPass]).then((result: any) => {
+        res.sendStatus(200);
     }).catch(() => {
         // DBS-Fehler
         res.sendStatus(500);
@@ -108,6 +114,11 @@ function register(req: express.Request, res: express.Response): void {
 
 // Löscht den Sessionstore und weist den Client an, das Cookie zu löschen
 function signOut(req: express.Request, res: express.Response): void {
+    if(!userSessions.delete(req.session.sessionKey)) {
+        // User nicht eingeloggt
+        res.sendStatus(404);
+    }
+
     req.session.destroy(() => {
         res.clearCookie("connect.sid");
         res.sendStatus(200);
@@ -139,10 +150,10 @@ function delUser(req: express.Request, res: express.Response): void {
 function addTask(req: express.Request, res: express.Response): void {
     const taskName: string = req.body.taskName;
     const taskDate: string = req.body.taskDate;
-    const signInName: string = req.session.signInName;
+    const userName: string = userSessions.get(req.session.sessionKey);
 
-    if(signInName !== undefined && taskName !== undefined && taskDate !== undefined) {
-        query("INSERT INTO task (name, titel, faelligkeit) VALUES (?, ?, ?);", [signInName, taskName, taskDate]).then(() => {
+    if(userName !== undefined && taskName !== undefined && taskDate !== undefined) {
+        query("INSERT INTO task (name, titel, faelligkeit) VALUES (?, ?, ?);", [userName, taskName, taskDate]).then(() => {
             res.sendStatus(200);
         }).catch(() => {
             // DBS-Fehler
@@ -155,14 +166,27 @@ function addTask(req: express.Request, res: express.Response): void {
 
 // Löscht einen Task aus der Datenbank
 function delTask(req: express.Request, res: express.Response): void {
-    const id: string = req.params.id;
+    const taskId: string = req.params.id;
+    const sessionKey: string = req.session.sessionKey;
 
-    query("DELETE FROM task WHERE id = ?;", [id]).then((results: any) => {
-        if(results.length === 1) {
-            res.sendStatus(200);
-        } else {
+    // Check, ob der Task zu dem Nutzer gehört
+    const signInName: string = userSessions.get(sessionKey);
+    query("SELECT * FROM task WHERE id = ? AND name = ?;", [taskId, signInName]).then((results: any) => {
+        if(results.length !== 1) {
+            // Es gibt keinen Task mit der Kombination aus ID und Benutzernamen
             res.sendStatus(404);
         }
+    }).catch(() => {
+        // DBS-Fehler
+        res.sendStatus(500);
+    });
+
+
+
+    query("DELETE FROM task WHERE id = ?;", [taskId]).then((results: any) => {
+        // Keine anderen Fehler sollten auftreten, da es sich sonst um einen groben Konstruktionsfehler der DB handeln würde
+        // Fehler im Muster: results.length ist undefined
+        res.sendStatus(200);
     }).catch(() => {
         // DBS-Fehler
         res.sendStatus(500);
@@ -174,14 +198,24 @@ function updTask(req: express.Request, res: express.Response): void {
     const taskId: string = req.body.taskId;
     const taskName: string = req.body.taskName;
     const taskDate: string = req.body.taskDate;
-    const signInName: string = req.session.signInName;
+    const sessionKey: string = req.session.sessionKey;
 
-    query("UPDATE task SET titel = ?, faelligkeit = ? WHERE id = ? AND name = ?;", [taskName, taskDate, taskId, signInName]).then((results: any) => {
-        if(results.length === 1) {
-            res.sendStatus(200);
-        } else {
+    // Check, ob der Task zu dem Nutzer gehört
+    const signInName: string = userSessions.get(sessionKey);
+    query("SELECT * FROM task WHERE id = ? AND name = ?;", [taskId, signInName]).then((results: any) => {
+        if(results.length !== 1) {
+            // Es gibt keinen Task mit der Kombination aus ID und Benutzernamen
             res.sendStatus(404);
         }
+    }).catch(() => {
+        // DBS-Fehler
+        res.sendStatus(500);
+    });
+
+
+    query("UPDATE task SET titel = ?, faelligkeit = ? WHERE id = ? AND name = ?;", [taskName, taskDate, taskId, signInName]).then((results: any) => {
+        // Keine anderen Fehler sollten auftreten, da es sich sonst um einen groben Konstruktionsfehler der DB handeln würde
+        res.sendStatus(200);
     }).catch(() => {
         // DBS-Fehler
         res.sendStatus(500);
@@ -190,7 +224,9 @@ function updTask(req: express.Request, res: express.Response): void {
 
 // Gibt alle Tasks eines Anwenders zurück
 function getTasks(req: express.Request, res: express.Response): void {
-    query("SELECT id, titel, faelligkeit FROM task WHERE name = ?;", [req.session.signInName]).then((result: any) => {
+    const userName: string = userSessions.get(req.session.sessionKey);
+
+    query("SELECT id, titel, faelligkeit FROM task WHERE name = ?;", [userName]).then((result: any) => {
         res.json(result);
     }).catch(() => {
         // DBS-Fehler
@@ -200,7 +236,7 @@ function getTasks(req: express.Request, res: express.Response): void {
 
 // Eine sog. Middleware-Route prüft, ob der Client angemeldet ist und ruft ggf. die nächste Funktion auf
 function checkLogin(req: express.Request, res: express.Response, next: express.NextFunction): void {
-    if (req.session.signInName !== undefined) {
+    if (req.session.signInName !== undefined && userSessions.has(req.session.sessionKey)) {
         // Ruft die nächste Funktion der Funktionskette
         next();
     } else {

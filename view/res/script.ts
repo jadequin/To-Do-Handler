@@ -67,13 +67,15 @@ function signOut(event: Event): void {
 
 function delUser(event: Event): void {
     event.preventDefault();
-    axios.delete("/delUser").finally(() => {
-        show(signInComp);
-        show(registerComp);
-        hide(signOutComp);
-        hide(tasksComp);
-        tasksTable.innerText = "";
-    });
+    if(confirm("Soll der User wirklich gelöscht werden?")) {
+        axios.delete("/delUser").finally(() => {
+            show(signInComp);
+            show(registerComp);
+            hide(signOutComp);
+            hide(tasksComp);
+            tasksTable.innerText = "";
+        });
+    }
 }
 
 function register(event: Event): void {
@@ -87,10 +89,10 @@ function register(event: Event): void {
         signInName: formData.get("registerName"),
         signInPass: formData.get("registerPass")
     }).then(() => {
+        const userName: string = formData.get("registerName").toString();
         target.reset();
-        registerComp.innerText = "";
+        alert("Registrierung des Nutzers " + userName + " erfolgreich");
     });
-    //TODO: Inputfelder leeren
 }
 
 function addTask(event: Event): void {
@@ -160,9 +162,8 @@ function editTask(event: Event): void {
         submitButton.value = "Aktualisieren";
         submitButton.dataset.taskid = id;
 
-        // TODO: Felder ausfüllen
-        (form.getElementsByTagName("input")[0] as HTMLInputElement).value = id;
-        (form.getElementsByTagName("input")[1] as HTMLInputElement).value = '1900-01-01';
+        (form.getElementsByTagName("input")[0] as HTMLInputElement).value = "";
+        (form.getElementsByTagName("input")[1] as HTMLInputElement).value = "";
     }
 }
 
