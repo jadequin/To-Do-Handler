@@ -36,11 +36,9 @@ router.use(express.urlencoded({extended: false}));
 
 // Bei jedem Request wird, falls noch nicht vorhanden, ein Cookie erstellt
 router.use(session({
-    cookie: {
-        expires: new Date(Date.now() + (1000 * 60 * 60)),
-    },
-    secret: Math.random().toString(),
-}));
+        cookie: { expires: new Date(Date.now() + (1000 * 60 * 60)) },
+        secret: Math.random().toString()
+    }));
 
 
 // Der Ordner ./view/res wird auf die URL /res gemapped
@@ -62,7 +60,7 @@ router.put("/task", checkLogin, updTask);
 router.get("/tasks", checkLogin, getTasks);
 router.get("/isLoggedIn", checkLogin, isLoggedIn);
 
-// Verwaltet eine Map mit Username / RandomSessionKey
+// Verwaltet eine Map mit  RandomSessionKey / Username
 const userSessions = new Map<string, string>();
 
 // Prüft, ob ein Nutzer registriert ist und speichert ggf. den Nutzernamen im Sessionstore ab

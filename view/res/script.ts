@@ -1,4 +1,4 @@
-//import axios, {AxiosResponse, AxiosError} from "axios"; // Diese Zeile vor der Ausführung auskommentieren!
+import axios, {AxiosResponse, AxiosError} from "axios"; // Diese Zeile vor der Ausführung auskommentieren!
 
 let signInComp: HTMLElement;
 let registerComp: HTMLElement;
